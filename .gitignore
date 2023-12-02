@@ -1,1 +1,7 @@
 /target
+
+
+# VS Code
+.vscode
+
+http-cacache
