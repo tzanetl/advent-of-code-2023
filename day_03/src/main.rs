@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::env;
 use std::error::Error;
 
@@ -20,15 +20,60 @@ fn parse_part_numbers(input: &str) -> Result<Vec<u32>, Box<dyn Error>> {
         debug!("{:?}", m);
         let checkpoints = get_checkpoints(m.start(), m.end(), &row_len, &total_len);
         debug!("{:?}", checkpoints);
-        if is_part_number(&continous, checkpoints) {
-            let number: u32 = m.as_str().parse()?;
-            part_numbers.push(number);
-        } else {
-            debug!("{} is not a part number", m.as_str());
+        let number: u32 = m.as_str().parse()?;
+        match is_part_number(&continous, checkpoints) {
+            NumberType::RANDOM => debug!("{} is not a part", number),
+            NumberType::PART | NumberType::GEAR(_) => {
+                part_numbers.push(number);
+            }
         }
     }
 
     Ok(part_numbers)
+}
+
+fn parse_gear_ratios(input: &str) -> Result<Vec<u32>, Box<dyn Error>> {
+    let mut part_numbers: Vec<u32> = vec![];
+    let mut gear_ratios: Vec<u32> = vec![];
+
+    let row_len: usize = input.lines().next().unwrap().len();
+    debug!("Row lenght: {0}", row_len);
+
+    let continous: String = input.lines().into_iter().collect::<Vec<&str>>().join("");
+    let total_len = continous.len();
+
+    let mut gear_cache: HashMap<usize, u32> = HashMap::new();
+
+    let re = Regex::new(r"\d+").unwrap();
+    for m in re.find_iter(&continous) {
+        debug!("{:?}", m);
+        let checkpoints = get_checkpoints(m.start(), m.end(), &row_len, &total_len);
+        debug!("{:?}", checkpoints);
+        let number: u32 = m.as_str().parse()?;
+        match is_part_number(&continous, checkpoints) {
+            NumberType::RANDOM => debug!("{} is not a part", number),
+            NumberType::PART => {
+                part_numbers.push(number);
+            }
+            NumberType::GEAR(gear_position) => {
+                if let Some(old_part) = gear_cache.remove(&gear_position) {
+                    debug!("gear found at position {}", gear_position);
+                    debug!("old part {}", old_part);
+                    debug!("current part numbers {:?}", part_numbers);
+                    let ratio: u32 = old_part * number;
+                    gear_ratios.push(ratio);
+                    let index = part_numbers.iter().position(|x| *x == old_part).unwrap();
+                    part_numbers.remove(index);
+                } else {
+                    part_numbers.push(number);
+                    gear_cache.insert(gear_position, number);
+                }
+                debug!("cache {:?}", gear_cache);
+            }
+        }
+    }
+
+    Ok(gear_ratios)
 }
 
 fn get_checkpoints(start: usize, end: usize, row_len: &usize, total_len: &usize) -> HashSet<usize> {
@@ -64,16 +109,24 @@ fn get_checkpoints(start: usize, end: usize, row_len: &usize, total_len: &usize)
     checkpoints
 }
 
-fn is_part_number(input: &str, checkpoints: HashSet<usize>) -> bool {
+enum NumberType {
+    RANDOM,
+    PART,
+    GEAR(usize),
+}
+
+fn is_part_number(input: &str, checkpoints: HashSet<usize>) -> NumberType {
     for ind in checkpoints {
         let c = &input[ind..ind + 1].chars().next().unwrap();
 
-        if c.is_numeric() || c == &'.' {
+        if c == &'*' {
+            return NumberType::GEAR(ind);
+        } else if c.is_numeric() || c == &'.' {
             continue;
         }
-        return true;
+        return NumberType::PART;
     }
-    false
+    NumberType::RANDOM
 }
 
 fn make_range<T: std::cmp::PartialOrd>(left: T, right: T) -> Box<std::ops::Range<T>> {
@@ -93,6 +146,11 @@ fn main() -> Result<(), Box<dyn Error>> {
     debug!("{:?}", part_numbers_p1);
     let schematic_number_p1: u32 = part_numbers_p1.iter().sum();
     println!("Part 1: {}", schematic_number_p1);
+
+    let gear_ratios = parse_gear_ratios(&input)?;
+    debug!("{:?}", gear_ratios);
+    let gear_ratio_sum: u32 = gear_ratios.iter().sum();
+    println!("Part 2: {}", gear_ratio_sum);
 
     Ok(())
 }
