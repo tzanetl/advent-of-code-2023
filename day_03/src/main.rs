@@ -33,7 +33,6 @@ fn parse_part_numbers(input: &str) -> Result<Vec<u32>, Box<dyn Error>> {
 }
 
 fn parse_gear_ratios(input: &str) -> Result<Vec<u32>, Box<dyn Error>> {
-    let mut part_numbers: Vec<u32> = vec![];
     let mut gear_ratios: Vec<u32> = vec![];
 
     let row_len: usize = input.lines().next().unwrap().len();
@@ -52,20 +51,14 @@ fn parse_gear_ratios(input: &str) -> Result<Vec<u32>, Box<dyn Error>> {
         let number: u32 = m.as_str().parse()?;
         match is_part_number(&continous, checkpoints) {
             NumberType::RANDOM => debug!("{} is not a part", number),
-            NumberType::PART => {
-                part_numbers.push(number);
-            }
+            NumberType::PART => {}
             NumberType::GEAR(gear_position) => {
                 if let Some(old_part) = gear_cache.remove(&gear_position) {
                     debug!("gear found at position {}", gear_position);
                     debug!("old part {}", old_part);
-                    debug!("current part numbers {:?}", part_numbers);
                     let ratio: u32 = old_part * number;
                     gear_ratios.push(ratio);
-                    let index = part_numbers.iter().position(|x| *x == old_part).unwrap();
-                    part_numbers.remove(index);
                 } else {
-                    part_numbers.push(number);
                     gear_cache.insert(gear_position, number);
                 }
                 debug!("cache {:?}", gear_cache);
