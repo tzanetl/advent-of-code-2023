@@ -1,5 +1,7 @@
 use std::env;
 use std::error::Error;
+use std::ops::Range;
+use std::time::SystemTime;
 
 use log::debug;
 use regex::Regex;
@@ -63,6 +65,32 @@ fn part_1(mappings: &Mappings, seeds: &[u32]) -> Vec<u32> {
     return locations;
 }
 
+fn part_2(mappings: Mappings, seeds: &[u32]) -> u32 {
+    let seed_ranges = make_seed_ranges(seeds);
+
+    let start = SystemTime::now();
+    let mut min_location: u32 = u32::MAX;
+    for seed in seed_ranges.iter().flat_map(|it| it.clone()) {
+        min_location = min_location.min(walk_index(&mappings, 0, seed))
+    }
+
+    let duration = SystemTime::now().duration_since(start).unwrap();
+    println!("That took: {:?}", duration);
+    return min_location;
+}
+
+fn make_seed_ranges(seeds: &[u32]) -> Vec<Range<u32>> {
+    let mut seed_ranges: Vec<Range<u32>> = vec![];
+    let (mut id_1, mut id_2): (usize, usize) = (0, 1);
+
+    while id_2 < seeds.len() {
+        seed_ranges.push(seeds[id_1]..(seeds[id_1] + seeds[id_2]));
+        id_1 += 2;
+        id_2 += 2;
+    }
+    return seed_ranges;
+}
+
 fn parse_input(input: &str) -> Result<(Vec<u32>, Mappings), Box<dyn Error>> {
     let re_seeds: Regex = Regex::new(r"\d+")?;
     let (seed_str, map_str) = input.split_once("seed-to-soil map:").unwrap();
@@ -113,6 +141,9 @@ fn main() -> Result<(), Box<dyn Error>> {
     debug!("Locations: {:?}", locations);
     let min_location_p1 = locations.iter().min().unwrap();
     println!("Part 1: {}", min_location_p1);
+
+    let min_location_p2 = part_2(mappings, &seeds);
+    println!("Part 2: {}", min_location_p2);
 
     Ok(())
 }
