@@ -8,19 +8,19 @@ use phf::phf_map;
 use utils::{read_input, set_logging_level};
 
 static CARD_STREGTH: phf::Map<char, u32> = phf_map! {
-    '2' => 0,
-    '3' => 1,
-    '4' => 2,
-    '5' => 3,
-    '6' => 4,
-    '7' => 5,
-    '8' => 6,
-    '9' => 7,
-    'T' => 8,
-    'J' => 9,
-    'Q' => 10,
-    'K' => 11,
-    'A' => 12,
+    '2' => 1,
+    '3' => 2,
+    '4' => 3,
+    '5' => 4,
+    '6' => 5,
+    '7' => 6,
+    '8' => 7,
+    '9' => 8,
+    'T' => 9,
+    'J' => 10,
+    'Q' => 11,
+    'K' => 12,
+    'A' => 13,
 };
 
 #[derive(Debug, PartialEq, PartialOrd)]
@@ -49,10 +49,7 @@ impl FromCards for Powers {
 
 impl FromCards for HandType {
     fn from_cards(cards: &str) -> Self {
-        let counts = cards.chars().fold(HashMap::new(), |mut map, c| {
-            *map.entry(c).or_insert(0) += 1;
-            map
-        });
+        let counts = count_cards(cards);
         debug!("Card counts: {:?}", counts);
 
         // Fives
@@ -90,6 +87,13 @@ struct Hand<'a> {
     bid: u64,
 }
 
+fn count_cards(cards: &str) -> HashMap<char, i32> {
+    cards.chars().fold(HashMap::new(), |mut map, c| {
+        *map.entry(c).or_insert(0) += 1;
+        map
+    })
+}
+
 fn parse_hands(input: &str) -> Vec<Hand> {
     input
         .lines()
@@ -117,6 +121,56 @@ impl TypedHand {
             powers: Powers::from_cards(hand.cards),
             bid: hand.bid,
         }
+    }
+
+    fn from_hand_with_jokers(hand: &Hand) -> Self {
+        let count = count_cards(hand.cards);
+        let jokers = match count.get(&'J') {
+            Some(val) => val,
+            None => {
+                debug!("No jokers");
+                return Self::from_hand(hand);
+            }
+        };
+        debug!("Jokers: {}", jokers);
+        debug!("Cards: {:?}", count);
+
+        let mut target_card: &char = &'J';
+        let mut target_card_count: &i32 = &0;
+        let mut target_card_strenth: &u32 = &0;
+        for (card, n) in &count {
+            if card == &'J' {
+                continue;
+            }
+            let strength = CARD_STREGTH.get(card).unwrap();
+            if n < target_card_count {
+                continue;
+            }
+            if n == target_card_count && strength < target_card_strenth {
+                continue;
+            }
+            target_card = card;
+            target_card_count = n;
+            target_card_strenth = strength;
+        }
+        let new_cards = hand.cards.replace("J", &target_card.to_string());
+        let powers: Powers = Powers::from_cards(hand.cards)
+            .into_iter()
+            .map(|p| if p == 10 { 0 } else { p })
+            .collect::<Vec<u32>>()
+            .try_into()
+            .unwrap();
+        debug!("Target card: {}", target_card);
+        debug!("Old cards: {}", hand.cards);
+        debug!("New cards: {}", new_cards);
+        debug!("Powers: {:?}", powers);
+        let ret = Self {
+            hand_type: HandType::from_cards(&new_cards),
+            powers: powers,
+            bid: hand.bid,
+        };
+        debug!("Hand type: {:?}", ret.hand_type);
+        ret
     }
 }
 
@@ -148,9 +202,26 @@ impl PartialEq for TypedHand {
 
 impl Eq for TypedHand {}
 
-fn part_1(typed_hands: &[TypedHand]) -> u64 {
+fn part_1(hands: &[Hand]) -> u64 {
+    let typed_hands: Vec<TypedHand> = hands.iter().map(|h| TypedHand::from_hand(h)).collect();
+    debug!("Typed hands: {:?}", typed_hands);
     let mut sorted_hands: Vec<&TypedHand> = typed_hands.iter().map(|h| h).collect();
     sorted_hands.sort();
+    count_winnings(&sorted_hands)
+}
+
+fn part_2(hands: &[Hand]) -> u64 {
+    let typed_hands: Vec<TypedHand> = hands
+        .iter()
+        .map(|h| TypedHand::from_hand_with_jokers(h))
+        .collect();
+    debug!("Typed hands: {:?}", typed_hands);
+    let mut sorted_hands: Vec<&TypedHand> = typed_hands.iter().map(|h| h).collect();
+    sorted_hands.sort();
+    count_winnings(&sorted_hands)
+}
+
+fn count_winnings(sorted_hands: &[&TypedHand]) -> u64 {
     debug!("Sorted hands: {:?}", sorted_hands);
     sorted_hands
         .iter()
@@ -165,10 +236,12 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let hands = parse_hands(&input);
     debug!("Hands: {:?}", hands);
-    let typed_hands: Vec<TypedHand> = hands.iter().map(|h| TypedHand::from_hand(h)).collect();
-    debug!("Typed hands: {:?}", typed_hands);
-    let winnigs = part_1(&typed_hands);
+
+    let winnigs = part_1(&hands);
     println!("Part 1: {}", winnigs);
+
+    let winnigs_p2 = part_2(&hands);
+    println!("Part 2: {}", winnigs_p2);
 
     Ok(())
 }
