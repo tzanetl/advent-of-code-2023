@@ -16,7 +16,7 @@ fn parse_input(input: &str) -> Vec<Vec<i64>> {
         .collect()
 }
 
-fn walk_history(history: &[i64]) -> i64 {
+fn walk_history(history: &[i64], move_forwards: bool) -> i64 {
     let mut new_line: Vec<i64> = vec![];
     let mut i: usize = 1;
     let mut all_zeros = true;
@@ -28,21 +28,37 @@ fn walk_history(history: &[i64]) -> i64 {
         new_line.push(value);
         i += 1;
     }
-    if !all_zeros {
-        new_line.push(walk_history(&new_line));
+    let op_value: i64 = if !all_zeros {
+        walk_history(&new_line, move_forwards)
     } else {
-        new_line.push(0);
-    }
-    let result = history.last().unwrap() + new_line.last().unwrap();
+        0
+    };
+
+    let result = if move_forwards {
+        history.last().unwrap() + op_value
+    } else {
+        history.first().unwrap() - op_value
+    };
+
     debug!("History: {:?}", history);
     debug!("New history: {:?}", new_line);
     debug!("All zeros: {}", all_zeros);
     debug!("New value: {}", result);
-    return history.last().unwrap() + new_line.last().unwrap();
+    result
 }
 
 fn part_1(histories: &[Vec<i64>]) -> i64 {
-    return histories.iter().map(|hist| walk_history(&hist[..])).sum();
+    return histories
+        .iter()
+        .map(|hist| walk_history(&hist[..], true))
+        .sum();
+}
+
+fn part_2(histories: &[Vec<i64>]) -> i64 {
+    return histories
+        .iter()
+        .map(|hist| walk_history(&hist[..], false))
+        .sum();
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
@@ -51,8 +67,12 @@ fn main() -> Result<(), Box<dyn Error>> {
     let input = read_input(&args);
 
     let histories = parse_input(&input);
+
     let explorations = part_1(&histories);
     println!("Part 1: {}", explorations);
+
+    let explorations_p2 = part_2(&histories);
+    println!("Part 2: {}", explorations_p2);
 
     Ok(())
 }
