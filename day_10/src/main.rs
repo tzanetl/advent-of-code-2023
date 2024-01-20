@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::env;
 use std::error::Error;
 
@@ -100,7 +100,7 @@ impl PipeTile {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Eq, Hash, PartialEq, Clone, Copy)]
 struct Path {
     from: Point,
     current: Point,
@@ -141,21 +141,103 @@ fn parse_input(input: &str) -> (Point, PipeMap) {
     (start_point, map)
 }
 
-fn part_1(map: &PipeMap, start_point: &Point) -> usize {
+fn part_1(map: &PipeMap, start_point: &Point) -> HashSet<Point> {
     let paths = starting_paths(map, start_point);
-    walk_paths(map, paths) / 2
+    walk_paths(map, paths)
 }
 
-fn walk_paths(map: &PipeMap, ini_paths: Vec<Path>) -> usize {
+fn part_2(mut map: PipeMap, start_point: &Point, walked_paths: &HashSet<Point>) -> u64 {
+    let initial_points: Vec<Point> = starting_paths(&map, start_point)
+        .iter()
+        .map(|p| p.current)
+        .collect();
+    let start_tile = get_start_tile_type(start_point, &initial_points[0], &initial_points[1]);
+    debug!("Start tile: {:?}", start_tile);
+    map.insert(*start_point, start_tile);
+
+    let max_col = walked_paths.iter().map(|&(_, v)| v).max().unwrap() + 1;
+    let max_row = walked_paths.iter().map(|&(v, _)| v).max().unwrap() + 1;
+    // Adds extra iterations but works fast enough (:
+    let max_row = max_row + max_col - 1;
+    debug!("Max row: {}", max_row);
+    debug!("Max col: {}", max_col);
+
+    let mut points_inside = 0;
+
+    for initial_row in 0..=max_row {
+        let mut row = initial_row;
+        let mut col: usize = 0;
+
+        let mut is_inside = false;
+        debug!("New row: {}", row);
+        loop {
+            let current_point = (row, col);
+            if walked_paths.contains(&current_point) {
+                match map.get(&current_point) {
+                    None => panic!("walked path not in map"),
+                    Some(PipeTile::SouthToEast) => (),
+                    Some(PipeTile::NorthToWest) => (),
+                    Some(_) => {
+                        debug!("Barrier passed: {:?}", current_point);
+                        is_inside = !is_inside;
+                        debug!("Is inside: {}", is_inside);
+                    }
+                }
+            } else if is_inside {
+                debug!("Point inside: {:?}", current_point);
+                points_inside += 1;
+            }
+            row = match row.checked_sub(1) {
+                Some(val) => val,
+                None => break,
+            };
+            if col > max_col {
+                break;
+            }
+            col += 1;
+        }
+    }
+
+    return points_inside;
+}
+
+fn get_start_tile_type(start_point: &Point, point_1: &Point, point_2: &Point) -> PipeTile {
+    if point_1.1 == point_2.1 {
+        return PipeTile::Vertical;
+    }
+    if point_1.0 == point_2.0 {
+        return PipeTile::Horizontal;
+    }
+
+    let (first_point, last_point) = match point_1 < point_2 {
+        true => (point_1, point_2),
+        false => (point_2, point_1),
+    };
+    debug!("First point: {:?}", first_point);
+    debug!("Last point: {:?}", last_point);
+
+    if start_point.0 < last_point.0 && start_point.1 < first_point.1 {
+        return PipeTile::SouthToEast;
+    }
+    if start_point.0 < last_point.0 && start_point.1 > first_point.1 {
+        return PipeTile::SouthToWest;
+    }
+    if start_point.0 > first_point.0 && start_point.1 < last_point.1 {
+        return PipeTile::NorthToEast;
+    }
+    PipeTile::NorthToWest
+}
+
+fn walk_paths(map: &PipeMap, ini_paths: Vec<Path>) -> HashSet<Point> {
     let mut paths = ini_paths;
-    let mut steps: usize = 1;
+    let mut walked_paths: HashSet<Point> = HashSet::new();
     loop {
         let mut new_paths: Vec<Path> = vec![];
-        steps += 1;
         for p in paths.iter() {
             if let Some(new_path) = p.move_next(map.get(&p.current).unwrap()) {
+                walked_paths.insert(new_path.current);
                 if map.get(&new_path.current) == Some(&PipeTile::Start) {
-                    return steps;
+                    return walked_paths;
                 }
                 new_paths.push(new_path);
             }
@@ -234,8 +316,12 @@ fn main() -> Result<(), Box<dyn Error>> {
     let input = read_input(&args);
     let (start_point, map) = parse_input(&input);
 
-    let steps_p1 = part_1(&map, &start_point);
+    let walked_paths = part_1(&map, &start_point);
+    let steps_p1 = walked_paths.len() / 2;
     println!("Part 1: {}", steps_p1);
+
+    let points_within = part_2(map, &start_point, &walked_paths);
+    println!("Part 2: {}", points_within);
 
     Ok(())
 }
@@ -290,5 +376,53 @@ mod tests {
         let pipe = PipeTile::NorthToEast;
         assert_eq!(pipe.next_point(&(0, 1), &current), Some((1, 2)));
         assert_eq!(pipe.next_point(&(1, 2), &current), Some((0, 1)));
+    }
+
+    #[test]
+    fn test_get_start_tile_type_vertical() {
+        assert_eq!(
+            get_start_tile_type(&(1, 1), &(0, 1), &(2, 1)),
+            PipeTile::Vertical
+        )
+    }
+
+    #[test]
+    fn test_get_start_tile_type_horizontal() {
+        assert_eq!(
+            get_start_tile_type(&(1, 1), &(1, 0), &(1, 2)),
+            PipeTile::Horizontal
+        )
+    }
+
+    #[test]
+    fn test_get_start_tile_type_south_to_east() {
+        assert_eq!(
+            get_start_tile_type(&(1, 1), &(2, 1), &(1, 2)),
+            PipeTile::SouthToEast
+        )
+    }
+
+    #[test]
+    fn test_get_start_tile_type_south_to_west() {
+        assert_eq!(
+            get_start_tile_type(&(1, 1), &(2, 1), &(1, 0)),
+            PipeTile::SouthToWest
+        )
+    }
+
+    #[test]
+    fn test_get_start_tile_type_north_to_east() {
+        assert_eq!(
+            get_start_tile_type(&(1, 1), &(0, 1), &(1, 2)),
+            PipeTile::NorthToEast
+        )
+    }
+
+    #[test]
+    fn test_get_start_tile_type_north_to_west() {
+        assert_eq!(
+            get_start_tile_type(&(1, 1), &(0, 1), &(1, 0)),
+            PipeTile::NorthToWest
+        )
     }
 }
